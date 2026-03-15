@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
 export default function UploadArea() {
-  const { isLoaded, userId, user } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
@@ -16,7 +16,7 @@ export default function UploadArea() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isLoaded && userId) {
+    if (isLoaded && isSignedIn && userId) {
       // 获取用户额度
       fetch('/api/credits')
         .then(res => res.json())
@@ -28,7 +28,7 @@ export default function UploadArea() {
     } else if (isLoaded) {
       setLoading(false);
     }
-  }, [isLoaded, userId]);
+  }, [isLoaded, isSignedIn, userId]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -121,7 +121,7 @@ export default function UploadArea() {
   }
 
   // 未登录显示登录提示
-  if (!userId) {
+  if (!isSignedIn) {
     return (
       <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
         <div className="mb-4">

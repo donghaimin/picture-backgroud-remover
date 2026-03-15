@@ -1,4 +1,5 @@
-import { auth, clerkClient } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 const REMOVE_BG_API_KEY = process.env.REMOVE_BG_API_KEY || 'njLZVzRji1mp8jUdAEihtTtp';
@@ -7,7 +8,7 @@ const INITIAL_CREDITS = 3;
 export async function POST(req: Request) {
   try {
     // 1. 验证用户登录
-    const { userId } = auth();
+    const { userId } = await auth();
     
     if (!userId) {
       return NextResponse.json(
