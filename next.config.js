@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   images: {
     remotePatterns: [
       {
@@ -7,15 +8,6 @@ const nextConfig = {
         hostname: '**',
       },
     ],
-  },
-  // Cloudflare Workers AI 支持
-  async rewrites() {
-    return [
-      {
-        source: '/api/ai/:path*',
-        destination: 'https://gateway.ai.cloudflare.com/:path*',
-      },
-    ];
   },
 };
 

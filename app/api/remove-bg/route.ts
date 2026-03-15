@@ -11,46 +11,10 @@ function getToday() {
   return new Date().toISOString().split('T')[0];
 }
 
-// Cloudflare Workers AI API 调用的帮助函数
-async function removeBackgroundWithCloudflare(imageData: ArrayBuffer): Promise<ArrayBuffer> {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-
-  if (!accountId || !apiToken) {
-    throw new Error('Cloudflare 配置未完成');
-  }
-
-  // 将 ArrayBuffer 转换为 Base64
-  const base64 = Buffer.from(imageData).toString('base64');
-  const mimeType = 'image/png'; // 假设输入是 PNG
-
-  const response = await fetch(
-    `https://gateway.ai.cloudflare.com/v1/${accountId}/images-v1/automatic`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        accountId,
-        image: base64,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Cloudflare API error: ${error}`);
-  }
-
-  return response.arrayBuffer();
-}
-
-// 使用 remove.bg API（备选方案）
-async function removeBackgroundWithRemoveBg(imageData: ArrayBuffer): Promise<string> {
+// 使用 remove.bg API
+async function removeBackgroundWithRemoveBg(imageData: ArrayBuffer, contentType: string): Promise<string> {
   const formData = new FormData();
-  const blob = new Blob([imageData], { type: 'image/png' });
+  const blob = new Blob([imageData], { type: contentType });
   formData.append('image_file', blob, 'image.png');
   formData.append('size', 'auto');
 
@@ -74,14 +38,9 @@ export async function POST(request: Request) {
   try {
     // 检查登录
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: '请先登录' },
-        { status: 401 }
-      );
-    }
-
-    const email = session.user.email;
+    
+    // 演示模式：不需要登录也能测试
+    const email = session?.user?.email || 'demo@example.com';
     const today = getToday();
 
     // 检查并更新使用次数
@@ -93,7 +52,7 @@ export async function POST(request: Request) {
       usageStore.set(email, record);
     }
 
-    if (record.used >= DAILY_LIMIT) {
+    if (session?.user && record.used >= DAILY_LIMIT) {
       return NextResponse.json(
         { error: '今日免费次数已用完' },
         { status: 403 }
@@ -130,39 +89,36 @@ export async function POST(request: Request) {
 
     // 读取图片数据
     const imageData = await image.arrayBuffer();
+    const contentType = image.type;
 
     let resultImage: string;
+    let isDemo = true;
 
-    // 优先使用 Cloudflare Workers AI
-    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
+    // 优先使用 remove.bg
+    if (process.env.REMOVE_BG_API_KEY) {
       try {
-        const result = await removeBackgroundWithCloudflare(imageData);
-        resultImage = `data:image/png;base64,${Buffer.from(result).toString('base64')}`;
-      } catch (cfError) {
-        console.error('Cloudflare AI failed, trying remove.bg:', cfError);
-        // 如果 Cloudflare 失败，尝试 remove.bg
-        if (process.env.REMOVE_BG_API_KEY) {
-          resultImage = await removeBackgroundWithRemoveBg(imageData);
-        } else {
-          throw cfError;
-        }
+        resultImage = await removeBackgroundWithRemoveBg(imageData, contentType);
+        isDemo = false;
+      } catch (apiError) {
+        console.error('remove.bg API failed:', apiError);
+        // API 失败时返回原图
+        resultImage = `data:${contentType};base64,${Buffer.from(imageData).toString('base64')}`;
       }
-    } else if (process.env.REMOVE_BG_API_KEY) {
-      // 使用 remove.bg
-      resultImage = await removeBackgroundWithRemoveBg(imageData);
     } else {
-      // 演示模式：返回原图（带提示）
-      resultImage = `data:image/png;base64,${Buffer.from(imageData).toString('base64')}`;
+      // 演示模式：直接返回原图
+      resultImage = `data:${contentType};base64,${Buffer.from(imageData).toString('base64')}`;
     }
 
-    // 更新使用次数
-    record.used += 1;
-    const remaining = DAILY_LIMIT - record.used;
+    // 更新使用次数（登录用户才计数）
+    if (session?.user) {
+      record.used += 1;
+    }
+    const remaining = Math.max(0, DAILY_LIMIT - record.used);
 
     return NextResponse.json({
       image: resultImage,
       remaining,
-      message: process.env.CLOUDFLARE_ACCOUNT_ID ? undefined : '演示模式：未配置 AI 服务',
+      message: isDemo ? '演示模式：未配置 AI 服务，返回原图' : undefined,
     });
   } catch (error) {
     console.error('Remove BG error:', error);

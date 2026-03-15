@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@cloudflare/next-on-pages"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/auth/(.*)",
+      "dest": "/api/auth/$1"
+    },
+    {
+      "src": "/api/remove-bg",
+      "dest": "/api/remove-bg"
+    },
+    {
+      "src": "/api/usage",
+      "dest": "/api/usage"
+    }
+  ]
+}

@@ -22,6 +22,8 @@ export default function UploadArea({ user }: UploadAreaProps) {
   const [remainingUses, setRemainingUses] = useState<number>(3);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isLoggedIn = !!session?.user;
+
   // 检查剩余次数
   const checkUsage = async () => {
     try {
@@ -30,7 +32,7 @@ export default function UploadArea({ user }: UploadAreaProps) {
       setRemainingUses(data.remaining);
       return data.remaining > 0;
     } catch {
-      return true;
+      return false;
     }
   };
 
@@ -50,8 +52,8 @@ export default function UploadArea({ user }: UploadAreaProps) {
     }
 
     // 检查登录
-    if (!session?.user) {
-      signIn('google');
+    if (!isLoggedIn) {
+      setError('请先登录后使用');
       return;
     }
 
@@ -131,14 +133,14 @@ export default function UploadArea({ user }: UploadAreaProps) {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8">
-      {/* 登录提示 */}
-      {!session?.user && (
+      {/* 登录提示 - 未登录显示 */}
+      {!isLoggedIn && (
         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
           <p className="text-center text-gray-700">
             请先
             <button 
               onClick={() => signIn('google')}
-              className="text-primary hover:underline font-medium"
+              className="text-primary hover:underline font-medium mx-1"
             >
               登录
             </button>
@@ -147,8 +149,8 @@ export default function UploadArea({ user }: UploadAreaProps) {
         </div>
       )}
 
-      {/* 剩余次数 */}
-      {session?.user && remainingUses > -1 && (
+      {/* 剩余次数 - 登录后显示 */}
+      {isLoggedIn && remainingUses > -1 && (
         <div className="mb-6 flex items-center justify-center gap-2">
           <span className="text-gray-600">今日剩余次数：</span>
           <span className={`font-bold ${remainingUses > 0 ? 'text-success' : 'text-error'}`}>
@@ -157,13 +159,17 @@ export default function UploadArea({ user }: UploadAreaProps) {
         </div>
       )}
 
-      {/* 上传区域 */}
+      {/* 上传区域 - 未登录禁用 */}
       {status === 'idle' && (
         <div
-          className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-primary transition-colors"
-          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+            isLoggedIn 
+              ? 'border-gray-300 cursor-pointer hover:border-primary' 
+              : 'border-gray-200 cursor-not-allowed bg-gray-50'
+          }`}
+          onClick={() => isLoggedIn && fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
-          onDrop={handleDrop}
+          onDrop={isLoggedIn ? handleDrop : undefined}
         >
           <input
             ref={fileInputRef}
@@ -171,6 +177,7 @@ export default function UploadArea({ user }: UploadAreaProps) {
             accept="image/jpeg,image/png,image/webp"
             onChange={handleFileSelect}
             className="hidden"
+            disabled={!isLoggedIn}
           />
           
           <div className="mb-4">
@@ -180,7 +187,7 @@ export default function UploadArea({ user }: UploadAreaProps) {
           </div>
           
           <p className="text-lg text-gray-700 mb-2">
-            点击上传图片，或拖拽到此处
+            {isLoggedIn ? '点击上传图片，或拖拽到此处' : '登录后上传图片'}
           </p>
           <p className="text-sm text-gray-500">
             支持 JPG, PNG, WebP · 最大 10MB

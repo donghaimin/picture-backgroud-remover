@@ -15,10 +15,12 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     
+    // 未登录用户视为演示用户
     if (!session?.user?.email) {
       return NextResponse.json({ 
         remaining: DAILY_LIMIT,
-        total: DAILY_LIMIT 
+        total: DAILY_LIMIT,
+        isDemo: true
       });
     }
 
@@ -39,6 +41,7 @@ export async function GET() {
     return NextResponse.json({
       remaining,
       total: DAILY_LIMIT,
+      isDemo: false,
     });
   } catch (error) {
     console.error('Usage API error:', error);
