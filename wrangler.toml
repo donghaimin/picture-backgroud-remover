@@ -1,6 +1,16 @@
 name = "picture-background-remover"
 compatibility_date = "2024-01-01"
-pages_build_output_dir = ".vercel/output/static"
+
+[env.production]
+name = "picture-background-remover"
+
+[[env.production.kv_namespaces]]
+binding = "USAGE"
+id = ""
+
+[[env.production.secrets]]
+name = "REMOVE_BG_API_KEY"
+value = "njLZVzRji1mp8jUdAEihtTtp"
 
 [vars]
-NEXT_PUBLIC_API_URL = ""
+NEXTAUTH_URL = ""
