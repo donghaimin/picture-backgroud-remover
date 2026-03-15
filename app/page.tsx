@@ -1,15 +1,11 @@
 import Image from 'next/image';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import UploadArea from '@/components/UploadArea';
 import Header from '@/components/Header';
 
-export default async function Home() {
-  const session = await getServerSession(authOptions);
-
+export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
-      <Header user={session?.user} />
+      <Header />
       
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Hero Section */}
@@ -23,7 +19,7 @@ export default async function Home() {
         </div>
 
         {/* Upload Area */}
-        <UploadArea user={session?.user} />
+        <UploadArea session={null} />
         
         {/* Features */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">

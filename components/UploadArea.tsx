@@ -1,40 +1,23 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useSession, signIn } from 'next-auth/react';
+import { useState, useRef } from 'next-auth/react';
+
+import type { Session } from 'next-auth';
 
 interface UploadAreaProps {
-  user?: {
-    name?: string | null;
-    email?: string | null;
-    image?: string | null;
-  } | null;
+  session?: Session | null;
 }
 
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
-export default function UploadArea({ user }: UploadAreaProps) {
-  const { data: session } = useSession();
+export default function UploadArea({ session }: UploadAreaProps) {
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [remainingUses, setRemainingUses] = useState<number>(3);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isLoggedIn = !!session?.user;
-
-  // 检查剩余次数
-  const checkUsage = async () => {
-    try {
-      const res = await fetch('/api/usage');
-      const data = await res.json();
-      setRemainingUses(data.remaining);
-      return data.remaining > 0;
-    } catch {
-      return false;
-    }
-  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,19 +31,6 @@ export default function UploadArea({ user }: UploadAreaProps) {
 
     if (file.size > 10 * 1024 * 1024) {
       setError('图片不能超过 10MB');
-      return;
-    }
-
-    // 检查登录
-    if (!isLoggedIn) {
-      setError('请先登录后使用');
-      return;
-    }
-
-    // 检查次数
-    const remaining = await checkUsage();
-    if (!remaining) {
-      setError('今日免费次数已用完，请明天再来');
       return;
     }
 
@@ -93,7 +63,6 @@ export default function UploadArea({ user }: UploadAreaProps) {
 
       const data = await res.json();
       setProcessedImage(data.image);
-      setRemainingUses(data.remaining);
       setStatus('success');
     } catch (err) {
       setError(err instanceof Error ? err.message : '处理失败，请重试');
@@ -133,43 +102,13 @@ export default function UploadArea({ user }: UploadAreaProps) {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8">
-      {/* 登录提示 - 未登录显示 */}
-      {!isLoggedIn && (
-        <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-          <p className="text-center text-gray-700">
-            请先
-            <button 
-              onClick={() => signIn('google')}
-              className="text-primary hover:underline font-medium mx-1"
-            >
-              登录
-            </button>
-            后使用，每日可免费处理 3 次
-          </p>
-        </div>
-      )}
-
-      {/* 剩余次数 - 登录后显示 */}
-      {isLoggedIn && remainingUses > -1 && (
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <span className="text-gray-600">今日剩余次数：</span>
-          <span className={`font-bold ${remainingUses > 0 ? 'text-success' : 'text-error'}`}>
-            {remainingUses}
-          </span>
-        </div>
-      )}
-
-      {/* 上传区域 - 未登录禁用 */}
+      {/* 上传区域 */}
       {status === 'idle' && (
         <div
-          className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
-            isLoggedIn 
-              ? 'border-gray-300 cursor-pointer hover:border-primary' 
-              : 'border-gray-200 cursor-not-allowed bg-gray-50'
-          }`}
-          onClick={() => isLoggedIn && fileInputRef.current?.click()}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-primary transition-colors"
+          onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
-          onDrop={isLoggedIn ? handleDrop : undefined}
+          onDrop={handleDrop}
         >
           <input
             ref={fileInputRef}
@@ -177,7 +116,6 @@ export default function UploadArea({ user }: UploadAreaProps) {
             accept="image/jpeg,image/png,image/webp"
             onChange={handleFileSelect}
             className="hidden"
-            disabled={!isLoggedIn}
           />
           
           <div className="mb-4">
@@ -187,7 +125,7 @@ export default function UploadArea({ user }: UploadAreaProps) {
           </div>
           
           <p className="text-lg text-gray-700 mb-2">
-            {isLoggedIn ? '点击上传图片，或拖拽到此处' : '登录后上传图片'}
+            点击上传图片，或拖拽到此处
           </p>
           <p className="text-sm text-gray-500">
             支持 JPG, PNG, WebP · 最大 10MB
