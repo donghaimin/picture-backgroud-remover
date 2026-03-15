@@ -1,6 +1,6 @@
 'use client';
 
-import { ClerkProvider, useUser, UserButton } from '@clerk/nextjs';
+import { ClerkProvider, useUser, UserButton, SignInButton } from '@clerk/nextjs';
 import { useState, useEffect } from 'react';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -33,12 +33,11 @@ export function AuthButton() {
           <UserButton />
         </>
       ) : (
-        <a
-          href="/sign-in"
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          登录
-        </a>
+        <SignInButton mode="redirect">
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+            登录
+          </button>
+        </SignInButton>
       )}
     </div>
   );

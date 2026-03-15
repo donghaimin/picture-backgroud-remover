@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, SignInButton } from '@clerk/nextjs';
 import { useState, useRef, useEffect } from 'react';
 
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
@@ -131,12 +131,11 @@ export default function UploadArea() {
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">请先登录</h3>
         <p className="text-gray-600 mb-4">登录后即可使用图片背景移除功能</p>
-        <a
-          href="/sign-in"
-          className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          登录
-        </a>
+        <SignInButton mode="redirect">
+          <button className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+            登录
+          </button>
+        </SignInButton>
       </div>
     );
   }
