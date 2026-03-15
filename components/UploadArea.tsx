@@ -1,23 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'next-auth/react';
-
-import type { Session } from 'next-auth';
-
-interface UploadAreaProps {
-  session?: Session | null;
-}
+import { useState, useRef } from 'react';
 
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
-export default function UploadArea({ session }: UploadAreaProps) {
+export default function UploadArea() {
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const isLoggedIn = !!session?.user;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -180,7 +172,7 @@ export default function UploadArea({ session }: UploadAreaProps) {
               <>
                 <button
                   onClick={handleDownload}
-                  className="px-6 py-3 bg-success text-white rounded-lg hover:bg-green-600 transition-colors font-medium"
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                 >
                   💾 下载 PNG
                 </button>
@@ -194,7 +186,7 @@ export default function UploadArea({ session }: UploadAreaProps) {
             ) : (
               <button
                 onClick={handleReset}
-                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors font-medium"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 重新上传
               </button>
@@ -206,7 +198,7 @@ export default function UploadArea({ session }: UploadAreaProps) {
       {/* 错误提示 */}
       {error && status === 'idle' && (
         <div className="mt-4 p-4 bg-red-50 rounded-lg">
-          <p className="text-error text-center">{error}</p>
+          <p className="text-red-600 text-center">{error}</p>
         </div>
       )}
     </div>
