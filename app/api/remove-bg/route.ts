@@ -34,8 +34,20 @@ export async function POST(req: Request) {
       const clerk = await clerkClient();
       const user = await clerk.users.getUser(userId);
       
-      // 从 publicMetadata 获取额度，如果没有则初始化为 3
-      const currentCredits = (user.publicMetadata?.credits as number) ?? INITIAL_CREDITS;
+      // 从 publicMetadata 获取额度，如果没有则初始化为 3（新用户首次使用）
+      let currentCredits = user.publicMetadata?.credits as number | undefined;
+      
+      // 新用户首次使用：初始化额度
+      if (currentCredits === undefined) {
+        currentCredits = INITIAL_CREDITS;
+        await clerk.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...user.publicMetadata,
+            credits: currentCredits,
+            registeredAt: new Date().toISOString(),
+          },
+        });
+      }
 
       // 4. 检查额度（再次确认，防止并发）
       if (currentCredits <= 0) {

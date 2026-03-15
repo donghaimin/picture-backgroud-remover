@@ -120,22 +120,38 @@ export default function UploadArea() {
     );
   }
 
-  // 未登录显示登录提示
+  // 未登录显示登录提示 + Tips
   if (!isSignedIn) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-        <div className="mb-4">
-          <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
+      <div className="bg-white rounded-2xl shadow-lg p-8">
+        {/* Tips 提示 */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🎁</div>
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-1">新用户专享</h3>
+              <p className="text-sm text-gray-600">
+                注册并登录后，<span className="text-blue-600 font-medium">免费赠送 3 次</span> AI 背景移除额度！
+              </p>
+            </div>
+          </div>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">请先登录</h3>
-        <p className="text-gray-600 mb-4">登录后即可使用图片背景移除功能</p>
-        <SignInButton mode="redirect">
-          <button className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
-            登录
-          </button>
-        </SignInButton>
+
+        {/* 登录区域 */}
+        <div className="text-center py-8">
+          <div className="mb-4">
+            <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">请先登录</h3>
+          <p className="text-gray-600 mb-4">登录后即可使用图片背景移除功能</p>
+          <SignInButton mode="redirect">
+            <button className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              登录 / 注册
+            </button>
+          </SignInButton>
+        </div>
       </div>
     );
   }
