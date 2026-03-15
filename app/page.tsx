@@ -1,11 +1,8 @@
 import UploadArea from '@/components/UploadArea';
-import Header from '@/components/Header';
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
-      <Header />
-      
       <div className="max-w-4xl mx-auto px-4 py-12">
         {/* Hero Section */}
         <div className="text-center mb-12">
