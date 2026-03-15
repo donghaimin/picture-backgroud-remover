@@ -6,19 +6,29 @@ import { useState, useRef, useEffect } from 'react';
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
 export default function UploadArea() {
-  const { isLoaded, userId } = useAuth();
+  const { isLoaded, userId, user } = useAuth();
   const [status, setStatus] = useState<ProcessingStatus>('idle');
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [credits, setCredits] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isLoaded) {
+    if (isLoaded && userId) {
+      // 获取用户额度
+      fetch('/api/credits')
+        .then(res => res.json())
+        .then(data => {
+          setCredits(data.credits || 0);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    } else if (isLoaded) {
       setLoading(false);
     }
-  }, [isLoaded]);
+  }, [isLoaded, userId]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -45,39 +55,30 @@ export default function UploadArea() {
     };
     reader.readAsDataURL(file);
 
-    // 直接在前端调用 remove.bg API
+    // 调用后端 API
     const formData = new FormData();
-    formData.append('image_file', file);
-    formData.append('size', 'auto');
+    formData.append('image', file);
 
     setStatus('processing');
     
     try {
-      const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+      const res = await fetch('/api/remove-bg', {
         method: 'POST',
-        headers: {
-          'X-Api-Key': 'njLZVzRji1mp8jUdAEihtTtp',
-        },
         body: formData,
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error('API 请求失败');
+        throw new Error(data.error || '处理失败');
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setProcessedImage(url);
+      setProcessedImage(data.image);
+      setCredits(data.credits);
       setStatus('success');
     } catch (err) {
-      // 如果 API 失败，返回原图作为演示
-      const reader2 = new FileReader();
-      reader2.onload = (e) => {
-        setProcessedImage(e.target?.result as string);
-        setError('演示模式：API 调用失败，显示原图');
-      };
-      reader2.readAsDataURL(file);
-      setStatus('success');
+      setError(err instanceof Error ? err.message : '处理失败，请重试');
+      setStatus('error');
     }
   };
 
@@ -111,7 +112,7 @@ export default function UploadArea() {
     }
   };
 
-  if (loading) {
+  if (loading || !isLoaded) {
     return (
       <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
         <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto"></div>
@@ -119,7 +120,7 @@ export default function UploadArea() {
     );
   }
 
-  // 未登录显示提示
+  // 未登录显示登录提示
   if (!userId) {
     return (
       <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
@@ -142,13 +143,25 @@ export default function UploadArea() {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-8">
+      {/* 额度显示 */}
+      <div className="mb-6 flex items-center justify-center gap-2">
+        <span className="text-gray-600">剩余免费次数：</span>
+        <span className={`font-bold text-xl ${credits > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {credits}
+        </span>
+      </div>
+
       {/* 上传区域 */}
       {status === 'idle' && (
         <div
-          className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-blue-500 transition-colors"
-          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+            credits > 0 
+              ? 'border-gray-300 cursor-pointer hover:border-blue-500' 
+              : 'border-gray-200 bg-gray-50 cursor-not-allowed'
+          }`}
+          onClick={() => credits > 0 && fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
-          onDrop={handleDrop}
+          onDrop={credits > 0 ? handleDrop : undefined}
         >
           <input
             ref={fileInputRef}
@@ -156,6 +169,7 @@ export default function UploadArea() {
             accept="image/jpeg,image/png,image/webp"
             onChange={handleFileSelect}
             className="hidden"
+            disabled={credits <= 0}
           />
           
           <div className="mb-4">
@@ -165,11 +179,19 @@ export default function UploadArea() {
           </div>
           
           <p className="text-lg text-gray-700 mb-2">
-            点击上传图片，或拖拽到此处
+            {credits > 0 ? '点击上传图片，或拖拽到此处' : '免费次数已用完'}
           </p>
           <p className="text-sm text-gray-500">
             支持 JPG, PNG, WebP · 最大 10MB
           </p>
+        </div>
+      )}
+
+      {/* 额度用完提示 */}
+      {credits <= 0 && status === 'idle' && (
+        <div className="mt-4 p-4 bg-red-50 rounded-lg text-center">
+          <p className="text-red-600 font-medium">免费次数已用完</p>
+          <p className="text-sm text-gray-600 mt-1">请联系管理员充值</p>
         </div>
       )}
 
@@ -214,23 +236,35 @@ export default function UploadArea() {
 
           {/* 操作按钮 */}
           <div className="flex justify-center gap-4">
-            <button
-              onClick={handleDownload}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-            >
-              💾 下载 PNG
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-            >
-              处理下一张
-            </button>
+            {status === 'success' && (
+              <>
+                <button
+                  onClick={handleDownload}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  💾 下载 PNG
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  处理下一张
+                </button>
+              </>
+            )}
+            {status === 'error' && (
+              <button
+                onClick={handleReset}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                重新上传
+              </button>
+            )}
           </div>
 
-          {/* 提示信息 */}
-          {error && (
-            <p className="text-center text-orange-600 text-sm">{error}</p>
+          {/* 错误提示 */}
+          {error && status !== 'error' && (
+            <p className="text-center text-red-600">{error}</p>
           )}
         </div>
       )}
