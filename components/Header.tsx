@@ -2,6 +2,7 @@
 
 import { signIn, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface HeaderProps {
   user?: {
