@@ -21,17 +21,22 @@ export async function GET() {
     // 如果没有额度字段，初始化为 3（仅首次）
     // 如果已有额度字段，保持原值（不重复发放）
     let credits = user.publicMetadata?.credits as number | undefined;
+    const hasReceivedFree = user.publicMetadata?.hasReceivedFreeCredits as boolean | undefined;
     
-    // 新用户：首次获取额度时初始化
-    if (credits === undefined) {
-      credits = INITIAL_CREDITS;
-      await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...user.publicMetadata,
-          credits: INITIAL_CREDITS,
-          registeredAt: new Date().toISOString(),
-        },
-      });
+    // 新用户：首次获取额度时初始化，且从未领取过免费额度
+    if (credits === undefined || (credits === 0 && !hasReceivedFree)) {
+      // 检查是否已经领取过免费额度（防止重复赠送）
+      if (!hasReceivedFree) {
+        credits = INITIAL_CREDITS;
+        await clerk.users.updateUserMetadata(userId, {
+          publicMetadata: {
+            ...user.publicMetadata,
+            credits: INITIAL_CREDITS,
+            hasReceivedFreeCredits: true,
+            registeredAt: new Date().toISOString(),
+          },
+        });
+      }
     }
 
     return NextResponse.json({

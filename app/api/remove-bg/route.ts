@@ -36,17 +36,27 @@ export async function POST(req: Request) {
       
       // 从 publicMetadata 获取额度，如果没有则初始化为 3（新用户首次使用）
       let currentCredits = user.publicMetadata?.credits as number | undefined;
+      const hasReceivedFree = user.publicMetadata?.hasReceivedFreeCredits as boolean | undefined;
       
-      // 新用户首次使用：初始化额度
+      // 新用户首次使用：初始化额度，且从未领取过免费额度
+      if (currentCredits === undefined || (currentCredits === 0 && !hasReceivedFree)) {
+        // 检查是否已经领取过免费额度（防止重复赠送）
+        if (!hasReceivedFree) {
+          currentCredits = INITIAL_CREDITS;
+          await clerk.users.updateUserMetadata(userId, {
+            publicMetadata: {
+              ...user.publicMetadata,
+              credits: currentCredits,
+              hasReceivedFreeCredits: true,
+              registeredAt: new Date().toISOString(),
+            },
+          });
+        }
+      }
+
+      // 确保额度有值（兜底）
       if (currentCredits === undefined) {
-        currentCredits = INITIAL_CREDITS;
-        await clerk.users.updateUserMetadata(userId, {
-          publicMetadata: {
-            ...user.publicMetadata,
-            credits: currentCredits,
-            registeredAt: new Date().toISOString(),
-          },
-        });
+        currentCredits = 0;
       }
 
       // 4. 检查额度（再次确认，防止并发）
