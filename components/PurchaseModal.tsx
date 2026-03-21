@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Package = {
   id: string;
@@ -40,9 +41,11 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   currentCredits: number;
+  onPurchaseSuccess?: () => void;
 };
 
-export default function PurchaseModal({ isOpen, onClose, currentCredits }: Props) {
+export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurchaseSuccess }: Props) {
+  const router = useRouter();
   const [selectedPackage, setSelectedPackage] = useState<string>('starter');
   const [purchasing, setPurchasing] = useState(false);
 
@@ -51,12 +54,36 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits }: Props
   const handlePurchase = async () => {
     setPurchasing(true);
     
-    // 模拟支付流程（等接入PayPal后替换）
-    setTimeout(() => {
-      alert('支付功能开发中，敬请期待！');
+    try {
+      // 调用后端创建 PayPal 订单
+      const res = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ packageId: selectedPackage }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || '创建订单失败');
+        setPurchasing(false);
+        return;
+      }
+
+      // 跳转到 PayPal 支付页面
+      if (data.approvalUrl) {
+        window.location.href = data.approvalUrl;
+      } else {
+        alert('支付链接获取失败');
+        setPurchasing(false);
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      alert('创建订单失败，请重试');
       setPurchasing(false);
-      onClose();
-    }, 1000);
+    }
   };
 
   const selected = packages.find(p => p.id === selectedPackage)!;
@@ -132,7 +159,7 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits }: Props
 
         {/* 提示 */}
         <p className="text-center text-gray-500 text-sm mt-4">
-          点击购买后将跳转至支付页面
+          点击购买后将跳转至 PayPal 支付
         </p>
       </div>
     </div>
