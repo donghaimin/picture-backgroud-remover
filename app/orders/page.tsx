@@ -3,6 +3,7 @@
 import { useAuth } from '@clerk/nextjs';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 type Order = {
   date: string;
@@ -15,20 +16,73 @@ export default function OrdersPage() {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentStatus, setPaymentStatus] = useState<'success' | 'canceled' | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
+
+  const searchParams = useSearchParams();
+  const success = searchParams.get('success');
+  const canceled = searchParams.get('canceled');
+  const token = searchParams.get('token');
+  const payerId = searchParams.get('PayerID');
 
   useEffect(() => {
     if (isLoaded && isSignedIn && userId) {
-      fetch('/api/orders')
-        .then(res => res.json())
-        .then(data => {
-          setOrders(data.orders || []);
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+      fetchOrders();
     } else if (isLoaded) {
       setLoading(false);
     }
   }, [isLoaded, isSignedIn, userId]);
+
+  useEffect(() => {
+    if (success === 'true' && token && payerId && isSignedIn) {
+      handlePayPalReturn();
+    } else if (success === 'true') {
+      setPaymentStatus('success');
+    } else if (canceled === 'true') {
+      setPaymentStatus('canceled');
+    }
+  }, [success, canceled, token, payerId, isSignedIn]);
+
+  const fetchOrders = () => {
+    fetch('/api/orders')
+      .then(res => res.json())
+      .then(data => {
+        setOrders(data.orders || []);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  const handlePayPalReturn = async () => {
+    setProcessingPayment(true);
+
+    try {
+      // 捕获 PayPal 支付
+      const response = await fetch('/api/paypal/capture-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, payerId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPaymentStatus('success');
+        // 重新获取订单列表
+        fetchOrders();
+      } else {
+        console.error('Capture failed:', data.error);
+        setPaymentStatus(null);
+      }
+    } catch (error) {
+      console.error('Capture error:', error);
+      setPaymentStatus(null);
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
 
   // 计算累计
   const totalOrders = orders.length;
@@ -66,6 +120,40 @@ export default function OrdersPage() {
           </Link>
           <h1 className="text-3xl font-bold text-gray-900">📋 历史订单</h1>
         </div>
+
+        {/* 支付状态提示 */}
+        {processingPayment && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+              <p className="text-blue-800">正在处理支付...</p>
+            </div>
+          </div>
+        )}
+
+        {paymentStatus === 'success' && !processingPayment && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">✅</div>
+              <div>
+                <p className="font-semibold text-green-800">支付成功！</p>
+                <p className="text-sm text-green-600">额度已添加到您的账户</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {paymentStatus === 'canceled' && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">⚠️</div>
+              <div>
+                <p className="font-semibold text-yellow-800">支付已取消</p>
+                <p className="text-sm text-yellow-600">您可以随时重新购买套餐</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 统计 */}
         {orders.length > 0 && (
