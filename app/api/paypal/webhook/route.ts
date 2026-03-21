@@ -167,7 +167,7 @@ export async function POST(req: Request) {
 
     await clerk.users.updateUserMetadata(userId, {
       publicMetadata: {
-        ...user.publicMetadata,
+        ...(user.publicMetadata || {}),
         credits: currentCredits + pkg.credits,
         purchaseHistory: [newOrder, ...existingHistory],
       },

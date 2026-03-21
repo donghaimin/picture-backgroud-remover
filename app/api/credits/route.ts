@@ -48,7 +48,7 @@ export async function GET() {
         credits = INITIAL_CREDITS;
         await clerk.users.updateUserMetadata(userId, {
           publicMetadata: {
-            ...metadata,
+            ...(metadata || {}),
             credits: INITIAL_CREDITS,
             hasReceivedFreeCredits: true,
             registeredAt: new Date().toISOString(),

@@ -290,7 +290,7 @@ export default function UploadArea() {
           </div>
 
           {/* 错误提示 */}
-          {error && status !== 'error' && (
+          {error && (
             <p className="text-center text-red-600">{error}</p>
           )}
         </div>

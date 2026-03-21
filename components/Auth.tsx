@@ -5,10 +5,22 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  if (!publishableKey) {
+    console.error('Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY environment variable');
+    return (
+      <div>
+        <div style={{ padding: '20px', backgroundColor: '#fee', color: '#c33' }}>
+          <strong>配置错误：</strong> 未设置 Clerk 密钥。请联系管理员。
+        </div>
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <ClerkProvider
-      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-    >
+    <ClerkProvider publishableKey={publishableKey}>
       {children}
     </ClerkProvider>
   );
