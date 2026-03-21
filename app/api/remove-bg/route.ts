@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       // 4. 检查额度（再次确认，防止并发）
       if (currentCredits <= 0) {
         return NextResponse.json(
-          { error: '免费额度已用完，请联系管理员充值' },
+          { error: '免费额度已用完，请购买套餐' },
           { status: 403 }
         );
       }
@@ -105,6 +105,8 @@ export async function POST(req: Request) {
       });
 
       if (!removeBgResponse.ok) {
+        const errorText = await removeBgResponse.text();
+        console.error('remove.bg API error:', errorText);
         throw new Error('remove.bg API 调用失败');
       }
 
