@@ -180,6 +180,7 @@ export async function POST(req: Request) {
           method: 'POST',
           headers: {
             'X-Api-Key': REMOVE_BG_API_KEY,
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             image_file_b64: imageBase64,
