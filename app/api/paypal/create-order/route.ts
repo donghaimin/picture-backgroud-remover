@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { setOrderCache } from '../order-cache';
 
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
@@ -78,12 +79,10 @@ export async function POST(req: Request) {
     const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
     const usdPrice = convertCnyToUsd(pkg.price);
 
-    // 获取站点 URL
+    // 获取站点 URL（修复三元运算符优先级问题）
     const baseUrl = process.env.NEXTAUTH_URL ||
-                   process.env.VERCEL_URL ?
-                   `https://${process.env.VERCEL_URL}` :
-                   req.headers.get('host') ?
-                   `https://${req.headers.get('host')}` :
+                   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+                   (req.headers.get('host') ? `https://${req.headers.get('host')}` : null) ||
                    'http://localhost:3000';
 
     // 获取 Access Token
@@ -99,7 +98,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         intent: 'CAPTURE',
         purchase_units: [{
-          reference_id: `${userId}_${packageId}_${Date.now()}`,
+          reference_id: `${packageId}|${userId}|${Date.now()}`,
           description: `购买 ${pkg.credits} 次图片背景移除`,
           amount: {
             currency_code: 'USD',
@@ -134,6 +133,14 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    // Store order info in cache for later retrieval during capture
+    setOrderCache(orderData.id, {
+      packageId,
+      credits: pkg.credits,
+      price: pkg.price,
+      userId,
+    });
 
     return NextResponse.json({
       orderId: orderData.id,

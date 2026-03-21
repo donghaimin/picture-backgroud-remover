@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { getOrderCache, deleteOrderCache } from '../order-cache';
 
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
@@ -117,58 +118,66 @@ export async function POST(req: Request) {
       );
     }
 
-    // 从订单信息中提取套餐数据
-    const purchaseUnit = captureData.purchase_units?.[0];
-    const referenceId = purchaseUnit?.reference_id || '';
-    console.log('Reference ID:', referenceId);
+    // 从缓存中获取套餐数据（使用 PayPal 订单 ID）
+    const payPalOrderId = captureData.id || token;
+    console.log('PayPal Order ID:', payPalOrderId);
 
-    if (!referenceId) {
-      console.error('No reference_id found in capture response');
-      return NextResponse.json(
-        {
-          error: '无法从 PayPal 订单中获取套餐信息',
-          debug: 'PayPal 订单中没有 reference_id',
-          details: captureData
-        },
-        { status: 500 }
-      );
+    // 优先从缓存读取（最快）
+    let cachedOrder = getOrderCache(payPalOrderId);
+    let pkg: { credits: number; price: number };
+
+    if (cachedOrder) {
+      console.log('Found cached order:', cachedOrder);
+      pkg = PACKAGES[cachedOrder.packageId as keyof typeof PACKAGES];
+    } else {
+      // 缓存未命中，从 reference_id 解析（作为后备方案）
+      console.warn('Order not found in cache, parsing reference_id as fallback');
+      const purchaseUnit = captureData.purchase_units?.[0];
+      const referenceId = purchaseUnit?.reference_id || '';
+      console.log('Reference ID:', referenceId);
+
+      if (!referenceId) {
+        return NextResponse.json(
+          {
+            error: '无法从 PayPal 订单中获取套餐信息',
+            debug: 'PayPal 订单中没有 reference_id，且缓存未命中',
+          },
+          { status: 500 }
+        );
+      }
+
+      // 使用 | 分隔符，格式：packageId|userId|timestamp
+      const parts = referenceId.split('|');
+      console.log('Reference ID parts:', parts);
+
+      if (parts.length < 3) {
+        return NextResponse.json(
+          {
+            error: '订单数据格式无效',
+            debug: `Expected format: packageId|userId|timestamp, got: "${referenceId}"`,
+            details: { parts, referenceId }
+          },
+          { status: 400 }
+        );
+      }
+
+      const packageId = parts[0];
+      console.log('Extracted Package ID:', packageId);
+
+      pkg = PACKAGES[packageId as keyof typeof PACKAGES];
+
+      if (!pkg) {
+        return NextResponse.json(
+          {
+            error: '无效的套餐',
+            debug: `Unknown package ID: "${packageId}". Available: ${Object.keys(PACKAGES).join(', ')}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log('Found package from reference_id:', pkg);
     }
-
-    const parts = referenceId.split('_');
-    console.log('Reference ID parts:', parts);
-    console.log('Parts length:', parts.length);
-
-    if (parts.length < 2) {
-      console.error('Invalid reference_id format:', referenceId);
-      return NextResponse.json(
-        {
-          error: '订单数据格式无效',
-          debug: `Expected format: userId_packageId_timestamp, got: ${referenceId}`,
-          details: { parts, referenceId }
-        },
-        { status: 400 }
-      );
-    }
-
-    const packageId = parts[1];
-    console.log('Extracted Package ID:', packageId);
-    console.log('Available package IDs:', Object.keys(PACKAGES));
-
-    const pkg = PACKAGES[packageId];
-
-    if (!pkg) {
-      console.error('Invalid package ID:', packageId);
-      return NextResponse.json(
-        {
-          error: '无效的套餐',
-          debug: `Unknown package ID: "${packageId}". Available: ${Object.keys(PACKAGES).join(', ')}`,
-          details: { referenceId, packageId, available: Object.keys(PACKAGES) }
-        },
-        { status: 400 }
-      );
-    }
-
-    console.log('Found package:', pkg);
 
     // 更新用户额度和订单历史
     const clerk = await clerkClient();
@@ -180,6 +189,8 @@ export async function POST(req: Request) {
     // 检查订单是否已处理
     if (existingHistory.some((order: any) => order.orderId === token)) {
       console.log('Order already processed:', token);
+      // Clean up cache
+      deleteOrderCache(payPalOrderId);
       return NextResponse.json({
         success: true,
         alreadyProcessed: true,
@@ -202,6 +213,9 @@ export async function POST(req: Request) {
         purchaseHistory: [newOrder, ...existingHistory],
       },
     });
+
+    // Clean up cache
+    deleteOrderCache(payPalOrderId);
 
     console.log(`User ${userId} purchased ${pkg.credits} credits via PayPal capture. Total: ${currentCredits + pkg.credits}`);
 
