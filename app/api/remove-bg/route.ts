@@ -5,6 +5,9 @@ import { NextResponse } from 'next/server';
 const REMOVE_BG_API_KEY = process.env.REMOVE_BG_API_KEY || 'njLZVzRji1mp8jUdAEihtTtp';
 const INITIAL_CREDITS = 3;
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // 内存锁（仅适用于单实例部署，生产环境建议用 Redis）
 const pendingRequests = new Map<string, boolean>();
 

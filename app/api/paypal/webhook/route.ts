@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import crypto from 'crypto';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // PayPal 配置
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'AR4gIzAc3sall1DPEDw_6PIYLP6KbPQUZ7Q9Mpa3wds_VLDwmOCBEU7Z9BcWfkAIg0ABSiA5vvCrI482';
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'EK2tmJeJwwn5cuWMi2SsPa8e_Q8Hz2u4L_JHQB8sZxKg2dossu7eMKBMNK9_grF-UyAFfmMfcXpvdxW7';

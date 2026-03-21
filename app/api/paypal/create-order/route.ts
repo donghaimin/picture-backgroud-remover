@@ -1,6 +1,9 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // PayPal 配置 - 从环境变量读取
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;

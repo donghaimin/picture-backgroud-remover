@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server';
 
 const INITIAL_CREDITS = 3;
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const { userId } = await auth();

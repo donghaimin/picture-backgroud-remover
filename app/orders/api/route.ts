@@ -2,6 +2,9 @@ import { auth } from '@clerk/nextjs/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // 内存存储订单（等接入PayPal后改为数据库）
 // key: userId, value: Order[]
 const ordersStore = new Map<string, any[]>();
