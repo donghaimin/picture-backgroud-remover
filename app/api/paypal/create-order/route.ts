@@ -9,21 +9,32 @@ const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 const PAYPAL_BASE_URL = process.env.PAYPAL_BASE_URL || 'https://api-m.sandbox.paypal.com';
 
-// 套餐配置（价格单位：分）
+// 汇率配置：人民币转美元
+// 默认汇率：1 USD ≈ 7.2 CNY，可通过环境变量覆盖
+const USD_CNY_RATE = Number(process.env.USD_CNY_RATE) || 7.2;
+
+// 套餐配置（价格单位：人民币分）
 const PACKAGES = {
-  starter: { credits: 10, price: 900 },    // ¥9
-  basic: { credits: 30, price: 2200 },     // ¥22
-  pro: { credits: 100, price: 6000 },      // ¥60
+  starter: { credits: 10, price: 900 },    // ¥9.00
+  basic: { credits: 30, price: 2200 },     // ¥22.00
+  pro: { credits: 100, price: 6000 },      // ¥60.00
 };
+
+// 将人民币分转换为美元
+function convertCnyToUsd(cnyCents: number): number {
+  const cnyAmount = cnyCents / 100;  // 转为人民币元
+  const usdAmount = cnyAmount / USD_CNY_RATE;  // 转为美元
+  return Math.round(usdAmount * 100) / 100;  // 保留两位小数
+}
 
 // 获取 PayPal Access Token
 async function getAccessToken() {
   if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-    throw new Error('PayPal Client ID 或 Secret 未配置');
+    throw new Error('PayPal credentials not configured. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
   }
 
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
-  
+
   const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -34,20 +45,17 @@ async function getAccessToken() {
   });
 
   const data = await response.json();
-  
+
   if (data.error) {
-    throw new Error(`PayPal认证失败: ${data.error_description || data.error}`);
+    throw new Error(`PayPal authentication failed: ${data.error_description || data.error}`);
   }
-  
+
   return data.access_token;
 }
 
 // 创建 PayPal 订单
 export async function POST(req: Request) {
   try {
-    console.log('PAYPAL_CLIENT_ID:', PAYPAL_CLIENT_ID ? '已配置' : '未配置');
-    console.log('PAYPAL_BASE_URL:', PAYPAL_BASE_URL);
-
     const { userId } = await auth();
 
     if (!userId) {
@@ -68,6 +76,7 @@ export async function POST(req: Request) {
     }
 
     const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
+    const usdPrice = convertCnyToUsd(pkg.price);
 
     // 获取 Access Token
     const accessToken = await getAccessToken();
@@ -85,8 +94,8 @@ export async function POST(req: Request) {
           reference_id: `${userId}_${packageId}_${Date.now()}`,
           description: `购买 ${pkg.credits} 次图片背景移除`,
           amount: {
-            currency_code: 'USD',  // Sandbox 只支持 USD
-            value: (pkg.price / 100).toFixed(2),  // 转成美元（这里为了简化，实际应该用汇率）
+            currency_code: 'USD',
+            value: usdPrice.toFixed(2),
           },
         }],
         application_context: {
@@ -100,7 +109,6 @@ export async function POST(req: Request) {
     });
 
     const orderData = await orderResponse.json();
-    console.log('PayPal order response:', orderData);
 
     if (!orderResponse.ok) {
       return NextResponse.json(

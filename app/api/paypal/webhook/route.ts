@@ -5,11 +5,11 @@ import crypto from 'crypto';
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
 
-// PayPal 配置
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'AR4gIzAc3sall1DPEDw_6PIYLP6KbPQUZ7Q9Mpa3wds_VLDwmOCBEU7Z9BcWfkAIg0ABSiA5vvCrI482';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'EK2tmJeJwwn5cuWMi2SsPa8e_Q8Hz2u4L_JHQB8sZxKg2dossu7eMKBMNK9_grF-UyAFfmMfcXpvdxW7';
-const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
-const WEBHOOK_SECRET = process.env.PAYPAL_WEBHOOK_SECRET || '';
+// PayPal 配置 - 必须从环境变量读取
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+const PAYPAL_BASE_URL = process.env.PAYPAL_BASE_URL || 'https://api-m.sandbox.paypal.com';
+const WEBHOOK_SECRET = process.env.PAYPAL_WEBHOOK_SECRET;
 
 // 套餐配置
 const PACKAGES: Record<string, { credits: number; price: number }> = {
@@ -19,10 +19,17 @@ const PACKAGES: Record<string, { credits: number; price: number }> = {
 };
 
 // 验证 Webhook 签名
-function verifyWebhookSignature(body: string, signature: string, timestamp: string): boolean {
+function verifyWebhookSignature(body: string, signature: string, timestamp: string, certUrl: string): boolean {
+  // 开发环境如果没有配置 WEBHOOK_SECRET，跳过验证
   if (!WEBHOOK_SECRET) {
-    console.warn('WEBHOOK_SECRET not set, skipping verification');
+    console.warn('WEBHOOK_SECRET not set, skipping verification (development mode)');
     return true;
+  }
+
+  // 生产环境必须验证签名
+  if (!signature || !timestamp || !certUrl) {
+    console.error('Missing webhook signature headers');
+    return false;
   }
 
   const message = `${timestamp}|${body}`;
@@ -31,14 +38,23 @@ function verifyWebhookSignature(body: string, signature: string, timestamp: stri
     .update(message)
     .digest('hex');
 
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(hash));
+  const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(hash));
+
+  if (!isValid) {
+    console.error('Webhook signature verification failed');
+  }
+
+  return isValid;
 }
 
 // 获取 Access Token
 async function getAccessToken() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    throw new Error('PayPal credentials not configured');
+  }
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
 
-  const response = await fetch('https://api-m.sandbox.paypal.com/v1/oauth2/token', {
+  const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${auth}`,
@@ -48,6 +64,11 @@ async function getAccessToken() {
   });
 
   const data = await response.json();
+
+  if (data.error) {
+    throw new Error(`PayPal auth failed: ${data.error_description || data.error}`);
+  }
+
   return data.access_token;
 }
 
@@ -55,7 +76,7 @@ async function getAccessToken() {
 async function capturePayPalOrder(orderId: string) {
   const accessToken = await getAccessToken();
 
-  const response = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${orderId}/capture`, {
+  const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -63,7 +84,17 @@ async function capturePayPalOrder(orderId: string) {
     },
   });
 
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Capture failed: ${error.message || 'Unknown error'}`);
+  }
+
   return response.json();
+}
+
+// 检查订单是否已处理（幂等性保护）
+function isOrderAlreadyProcessed(purchaseHistory: any[], orderId: string): boolean {
+  return purchaseHistory.some(order => order.orderId === orderId);
 }
 
 export async function POST(req: Request) {
@@ -71,66 +102,86 @@ export async function POST(req: Request) {
     const bodyText = await req.text();
     const signature = req.headers.get('paypal-transmission-sig') || '';
     const timestamp = req.headers.get('paypal-transmission-time') || '';
+    const certUrl = req.headers.get('paypal-cert-url') || '';
 
-    // 验证签名（开发环境可跳过）
-    // if (!verifyWebhookSignature(bodyText, signature, timestamp)) {
-    //   return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    // }
-
-    const event = JSON.parse(bodyText);
-
-    console.log('PayPal webhook event:', event.event_type);
-
-    // 只处理 CHECKOUT.ORDER.APPROVED 和 PAYMENT.CAPTURE.COMPLETED
-    if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED' || event.event_type === 'CHECKOUT.ORDER.APPROVED') {
-      const resource = event.resource;
-      
-      // 从 reference_id 提取用户信息
-      // 格式: userId_packageId_timestamp
-      const referenceId = resource.purchase_units?.[0]?.reference_id || '';
-      const [userId, packageId] = referenceId.split('_');
-
-      if (!userId || !packageId || !PACKAGES[packageId]) {
-        console.error('Invalid reference_id:', referenceId);
-        return NextResponse.json({ received: true });
-      }
-
-      const pkg = PACKAGES[packageId];
-
-      // 如果是 APPROVED 事件，需要先捕获支付
-      if (event.event_type === 'CHECKOUT.ORDER.APPROVED') {
-        await capturePayPalOrder(resource.id);
-      }
-
-      // 更新用户额度
-      const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
-
-      const currentCredits = (user.publicMetadata?.credits as number) || 0;
-      const existingHistory = (user.publicMetadata?.purchaseHistory as any[]) || [];
-
-      // 添加订单记录
-      const newOrder = {
-        date: new Date().toISOString(),
-        amount: pkg.price,
-        credits: pkg.credits,
-        orderId: resource.id,
-      };
-
-      await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...user.publicMetadata,
-          credits: currentCredits + pkg.credits,
-          purchaseHistory: [newOrder, ...existingHistory],
-        },
-      });
-
-      console.log(`User ${userId} purchased ${pkg.credits} credits. Total: ${currentCredits + pkg.credits}`);
+    // 验证签名
+    if (!verifyWebhookSignature(bodyText, signature, timestamp, certUrl)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
+    const event = JSON.parse(bodyText);
+    const eventType = event.event_type;
+
+    console.log('PayPal webhook event:', eventType);
+
+    // 只处理 PAYMENT.CAPTURE.COMPLETED 事件（支付完成）
+    // 忽略 CHECKOUT.ORDER.APPROVED，因为可能不一定会完成支付
+    if (eventType !== 'PAYMENT.CAPTURE.COMPLETED') {
+      console.log(`Ignoring event type: ${eventType}`);
+      return NextResponse.json({ received: true });
+    }
+
+    const resource = event.resource;
+    const orderId = resource.id;
+
+    // 从 reference_id 提取用户信息
+    // 格式: userId_packageId_timestamp
+    const referenceId = resource.purchase_units?.[0]?.reference_id || '';
+    const parts = referenceId.split('_');
+
+    if (parts.length < 2) {
+      console.error('Invalid reference_id format:', referenceId);
+      return NextResponse.json({ received: true });
+    }
+
+    const userId = parts[0];
+    const packageId = parts[1];
+
+    if (!userId || !packageId || !PACKAGES[packageId]) {
+      console.error('Invalid package or user:', { userId, packageId });
+      return NextResponse.json({ received: true });
+    }
+
+    const pkg = PACKAGES[packageId];
+
+    // 获取用户信息
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(userId);
+
+    const currentCredits = (user.publicMetadata?.credits as number) || 0;
+    const existingHistory = (user.publicMetadata?.purchaseHistory as any[]) || [];
+
+    // 幂等性检查：如果订单已处理，跳过
+    if (isOrderAlreadyProcessed(existingHistory, orderId)) {
+      console.log(`Order ${orderId} already processed, skipping`);
+      return NextResponse.json({ received: true });
+    }
+
+    // 添加订单记录
+    const newOrder = {
+      date: new Date().toISOString(),
+      amount: pkg.price,
+      credits: pkg.credits,
+      orderId: orderId,
+    };
+
+    await clerk.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...user.publicMetadata,
+        credits: currentCredits + pkg.credits,
+        purchaseHistory: [newOrder, ...existingHistory],
+      },
+    });
+
+    console.log(`User ${userId} purchased ${pkg.credits} credits. Total: ${currentCredits + pkg.credits}`);
+
     return NextResponse.json({ received: true });
+
   } catch (error) {
     console.error('Webhook error:', error);
-    return NextResponse.json({ error: 'Webhook处理失败' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Webhook processing failed' },
+      { status: 500 }
+    );
   }
 }

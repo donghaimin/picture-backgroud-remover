@@ -48,12 +48,14 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurch
   const router = useRouter();
   const [selectedPackage, setSelectedPackage] = useState<string>('starter');
   const [purchasing, setPurchasing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handlePurchase = async () => {
     setPurchasing(true);
-    
+    setError(null);
+
     try {
       // 调用后端创建 PayPal 订单
       const res = await fetch('/api/paypal/create-order', {
@@ -67,7 +69,7 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurch
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || '创建订单失败');
+        setError(data.error || '创建订单失败，请重试');
         setPurchasing(false);
         return;
       }
@@ -76,12 +78,12 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurch
       if (data.approvalUrl) {
         window.location.href = data.approvalUrl;
       } else {
-        alert('支付链接获取失败');
+        setError('支付链接获取失败');
         setPurchasing(false);
       }
-    } catch (error) {
-      console.error('Purchase error:', error);
-      alert('创建订单失败，请重试');
+    } catch (err) {
+      console.error('Purchase error:', err);
+      setError('网络错误，请检查连接后重试');
       setPurchasing(false);
     }
   };
@@ -91,11 +93,11 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurch
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 遮罩 */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      
+
       {/* 弹窗 */}
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6">
         {/* 关闭按钮 */}
@@ -115,12 +117,22 @@ export default function PurchaseModal({ isOpen, onClose, currentCredits, onPurch
           <p className="text-gray-600">当前剩余：{currentCredits} 次</p>
         </div>
 
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
         {/* 套餐选择 */}
         <div className="space-y-3 mb-6">
           {packages.map((pkg) => (
             <div
               key={pkg.id}
-              onClick={() => setSelectedPackage(pkg.id)}
+              onClick={() => {
+                setSelectedPackage(pkg.id);
+                setError(null);
+              }}
               className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${
                 selectedPackage === pkg.id
                   ? 'border-blue-500 bg-blue-50'

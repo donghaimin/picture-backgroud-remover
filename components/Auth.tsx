@@ -1,13 +1,13 @@
 'use client';
 
-import { ClerkProvider, useUser, SignInButton } from '@clerk/nextjs';
+import { ClerkProvider, useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider 
-      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_YWNjb3VudC1tb2NrLWdsb3NzLTgyLmNsZXJrLmFjY291bnRzLmRldiQ'}
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
     >
       {children}
     </ClerkProvider>
@@ -56,9 +56,9 @@ export function AuthButton() {
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
               {user.imageUrl ? (
-                <img 
-                  src={user.imageUrl} 
-                  alt={user.fullName || 'User'} 
+                <img
+                  src={user.imageUrl}
+                  alt={user.fullName || 'User'}
                   className="w-8 h-8 rounded-full"
                 />
               ) : (
@@ -67,10 +67,10 @@ export function AuthButton() {
                 </div>
               )}
               <span className="text-sm text-gray-700">{user.fullName || user.username}</span>
-              <svg 
-                className={`w-4 h-4 text-gray-500 transition-transform ${showMenu ? 'rotate-180' : ''}`} 
-                fill="none" 
-                stroke="currentColor" 
+              <svg
+                className={`w-4 h-4 text-gray-500 transition-transform ${showMenu ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -91,18 +91,14 @@ export function AuthButton() {
                   📋 历史订单
                 </Link>
                 <div className="border-t border-gray-200 my-1"></div>
-                <button
-                  onClick={() => {
-                    // 退出登录
-                    window.location.href = '/';
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  退出登录
-                </button>
+                <SignOutButton signOutCallback={() => setShowMenu(false)}>
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    退出登录
+                  </button>
+                </SignOutButton>
               </div>
             )}
           </div>

@@ -5,9 +5,13 @@ import { NextResponse } from 'next/server';
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
 
-// 内存存储订单（等接入PayPal后改为数据库）
-// key: userId, value: Order[]
-const ordersStore = new Map<string, any[]>();
+// 订单历史类型定义
+type PurchaseOrder = {
+  date: string;
+  amount: number;
+  credits: number;
+  orderId: string;
+};
 
 export async function GET() {
   try {
@@ -20,8 +24,8 @@ export async function GET() {
     // 从 Clerk 获取订单历史
     const clerk = await clerkClient();
     const user = await clerk.users.getUser(userId);
-    
-    const purchaseHistory = user.publicMetadata?.purchaseHistory as any[] | undefined;
+
+    const purchaseHistory = user.publicMetadata?.purchaseHistory as PurchaseOrder[] | undefined;
     const orders = purchaseHistory || [];
 
     return NextResponse.json({ orders });
@@ -61,10 +65,18 @@ export async function POST(req: Request) {
     const user = await clerk.users.getUser(userId);
 
     // 获取现有订单历史
-    const existingHistory = (user.publicMetadata?.purchaseHistory as any[]) || [];
-    
+    const existingHistory = (user.publicMetadata?.purchaseHistory as PurchaseOrder[]) || [];
+
+    // 检查订单是否已存在
+    if (existingHistory.some(order => order.orderId === orderId)) {
+      return NextResponse.json(
+        { error: '订单已存在' },
+        { status: 400 }
+      );
+    }
+
     // 添加新订单
-    const newOrder = {
+    const newOrder: PurchaseOrder = {
       date: new Date().toISOString(),
       amount,
       credits,
@@ -84,8 +96,8 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       order: newOrder,
       credits: currentCredits + credits
     });
