@@ -20,7 +20,7 @@ export async function GET() {
     },
     clerkAuth: {
       working: false,
-      userId: null,
+      userId: null as string | null,
     },
   };
 
