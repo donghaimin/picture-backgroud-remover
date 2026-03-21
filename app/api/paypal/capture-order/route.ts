@@ -76,133 +76,140 @@ export async function POST(req: Request) {
     console.log('Payer ID:', payerId);
 
     // 获取 Access Token
+    let accessToken: string;
     try {
-      const accessToken = await getAccessToken();
+      accessToken = await getAccessToken();
       console.log('Got access token');
-
-      // 捕获 PayPal 订单
-      console.log('Capturing PayPal order:', token);
-      const captureResponse = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${token}/capture`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const captureData = await captureResponse.json();
-      console.log('PayPal capture response status:', captureResponse.status);
-      console.log('PayPal capture response:', captureData);
-
-      if (!captureResponse.ok) {
-        console.error('Capture failed:', captureData);
-        return NextResponse.json(
-          {
-            error: captureData.message || '捕获支付失败',
-            details: captureData,
-            debug: 'PayPal API call failed'
-          },
-          { status: 500 }
-        );
-      }
-
-      // 从订单信息中提取套餐数据
-      const purchaseUnit = captureData.purchase_units?.[0];
-      const referenceId = purchaseUnit?.reference_id || '';
-      console.log('Reference ID:', referenceId);
-
-      if (!referenceId) {
-        console.error('No reference_id found in capture response');
-        return NextResponse.json(
-          {
-            error: '无法从 PayPal 订单中获取套餐信息',
-            details: captureData
-          },
-          { status: 500 }
-        );
-      }
-
-      const parts = referenceId.split('_');
-      console.log('Reference ID parts:', parts);
-
-      if (parts.length < 2) {
-        console.error('Invalid reference_id format:', referenceId);
-        return NextResponse.json(
-          {
-            error: '订单数据格式无效',
-            debug: `Expected format: userId_packageId_timestamp, got: ${referenceId}`
-          },
-          { status: 400 }
-        );
-      }
-
-      const packageId = parts[1];
-      console.log('Package ID:', packageId);
-
-      const pkg = PACKAGES[packageId];
-
-      if (!pkg) {
-        console.error('Invalid package ID:', packageId);
-        return NextResponse.json(
-          {
-            error: '无效的套餐',
-            debug: `Unknown package ID: ${packageId}`
-          },
-          { status: 400 }
-        );
-      }
-
-      // 更新用户额度和订单历史
-      const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
-
-      const currentCredits = (user.publicMetadata?.credits as number) || 0;
-      const existingHistory = (user.publicMetadata?.purchaseHistory as any[]) || [];
-
-      // 检查订单是否已处理
-      if (existingHistory.some((order: any) => order.orderId === token)) {
-        console.log('Order already processed:', token);
-        return NextResponse.json({
-          success: true,
-          alreadyProcessed: true,
-          credits: currentCredits,
-        });
-      }
-
-      // 添加新订单
-      const newOrder = {
-        date: new Date().toISOString(),
-        amount: pkg.price,
-        credits: pkg.credits,
-        orderId: token,
-      };
-
-      await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          ...(user.publicMetadata || {}),
-          credits: currentCredits + pkg.credits,
-          purchaseHistory: [newOrder, ...existingHistory],
-        },
-      });
-
-      console.log(`User ${userId} purchased ${pkg.credits} credits via PayPal capture. Total: ${currentCredits + pkg.credits}`);
-
-      return NextResponse.json({
-        success: true,
-        order: newOrder,
-        credits: currentCredits + pkg.credits,
-      });
-
     } catch (error) {
-      console.error('PayPal API error:', error);
+      console.error('Failed to get access token:', error);
       return NextResponse.json(
         {
-          error: error instanceof Error ? error.message : 'PayPal API 调用失败',
-          debug: String(error)
+          error: 'PayPal 配置错误',
+          debug: error instanceof Error ? error.message : 'Unknown error'
         },
         { status: 500 }
       );
     }
+
+    // 捕获 PayPal 订单
+    console.log('Capturing PayPal order:', token);
+    const captureResponse = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${token}/capture`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const captureData = await captureResponse.json();
+    console.log('PayPal capture response status:', captureResponse.status);
+    console.log('PayPal capture response:', JSON.stringify(captureData, null, 2));
+
+    if (!captureResponse.ok) {
+      console.error('Capture failed:', captureData);
+      return NextResponse.json(
+        {
+          error: captureData.message || '捕获支付失败',
+          details: captureData,
+          debug: 'PayPal API call failed'
+        },
+        { status: 500 }
+      );
+    }
+
+    // 从订单信息中提取套餐数据
+    const purchaseUnit = captureData.purchase_units?.[0];
+    const referenceId = purchaseUnit?.reference_id || '';
+    console.log('Reference ID:', referenceId);
+
+    if (!referenceId) {
+      console.error('No reference_id found in capture response');
+      return NextResponse.json(
+        {
+          error: '无法从 PayPal 订单中获取套餐信息',
+          debug: 'PayPal 订单中没有 reference_id',
+          details: captureData
+        },
+        { status: 500 }
+      );
+    }
+
+    const parts = referenceId.split('_');
+    console.log('Reference ID parts:', parts);
+    console.log('Parts length:', parts.length);
+
+    if (parts.length < 2) {
+      console.error('Invalid reference_id format:', referenceId);
+      return NextResponse.json(
+        {
+          error: '订单数据格式无效',
+          debug: `Expected format: userId_packageId_timestamp, got: ${referenceId}`,
+          details: { parts, referenceId }
+        },
+        { status: 400 }
+      );
+    }
+
+    const packageId = parts[1];
+    console.log('Extracted Package ID:', packageId);
+    console.log('Available package IDs:', Object.keys(PACKAGES));
+
+    const pkg = PACKAGES[packageId];
+
+    if (!pkg) {
+      console.error('Invalid package ID:', packageId);
+      return NextResponse.json(
+        {
+          error: '无效的套餐',
+          debug: `Unknown package ID: "${packageId}". Available: ${Object.keys(PACKAGES).join(', ')}`,
+          details: { referenceId, packageId, available: Object.keys(PACKAGES) }
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('Found package:', pkg);
+
+    // 更新用户额度和订单历史
+    const clerk = await clerkClient();
+    const user = await clerk.users.getUser(userId);
+
+    const currentCredits = (user.publicMetadata?.credits as number) || 0;
+    const existingHistory = (user.publicMetadata?.purchaseHistory as any[]) || [];
+
+    // 检查订单是否已处理
+    if (existingHistory.some((order: any) => order.orderId === token)) {
+      console.log('Order already processed:', token);
+      return NextResponse.json({
+        success: true,
+        alreadyProcessed: true,
+        credits: currentCredits,
+      });
+    }
+
+    // 添加新订单
+    const newOrder = {
+      date: new Date().toISOString(),
+      amount: pkg.price,
+      credits: pkg.credits,
+      orderId: token,
+    };
+
+    await clerk.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...(user.publicMetadata || {}),
+        credits: currentCredits + pkg.credits,
+        purchaseHistory: [newOrder, ...existingHistory],
+      },
+    });
+
+    console.log(`User ${userId} purchased ${pkg.credits} credits via PayPal capture. Total: ${currentCredits + pkg.credits}`);
+
+    return NextResponse.json({
+      success: true,
+      order: newOrder,
+      credits: currentCredits + pkg.credits,
+    });
 
   } catch (error) {
     console.error('Capture order error:', error);
