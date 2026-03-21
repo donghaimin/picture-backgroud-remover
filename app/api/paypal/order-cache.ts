@@ -1,6 +1,7 @@
 // Simple in-memory cache for PayPal order data
 // In production, you'd use Redis or a database
 
+// 存储类型（包含 createdAt）
 type OrderCache = {
   packageId: string;
   credits: number;
@@ -8,6 +9,9 @@ type OrderCache = {
   userId: string;
   createdAt: number;
 };
+
+// 输入类型（不含 createdAt，由函数内部注入）
+type OrderCacheInput = Omit<OrderCache, 'createdAt'>;
 
 const orderCache = new Map<string, OrderCache>();
 
@@ -21,7 +25,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
-export function setOrderCache(orderId: string, data: OrderCache) {
+export function setOrderCache(orderId: string, data: OrderCacheInput) {
   orderCache.set(orderId, { ...data, createdAt: Date.now() });
 }
 
