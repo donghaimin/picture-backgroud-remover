@@ -1,29 +1,33 @@
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-const REMOVE_BG_API_KEY = process.env.REMOVE_BG_API_KEY || 'njLZVzRji1mp8jUdAEihtTtp';
+const REMOVE_BG_API_KEY = process.env.REMOVE_BG_API_KEY;
 const INITIAL_CREDITS = 3;
 
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
 
-// 内存锁（仅适用于单实例部署，生产环境建议用 Redis）
+// 内存锁
 const pendingRequests = new Map<string, boolean>();
 
 export async function POST(req: Request) {
+  console.log('=== Remove BG API Called ===');
+  
   try {
     // 1. 验证用户登录
     const { userId } = await auth();
+    console.log('User ID:', userId);
     
     if (!userId) {
+      console.log('User not authenticated');
       return NextResponse.json(
         { error: '请先登录' },
         { status: 401 }
       );
     }
 
-    // 2. 并发锁：防止同一用户同时多次请求
+    // 2. 检查并发锁
     if (pendingRequests.get(userId)) {
       return NextResponse.json(
         { error: '处理中，请稍候...' },
@@ -37,13 +41,12 @@ export async function POST(req: Request) {
       const clerk = await clerkClient();
       const user = await clerk.users.getUser(userId);
       
-      // 从 publicMetadata 获取额度，如果没有则初始化为 3（新用户首次使用）
       let currentCredits = user.publicMetadata?.credits as number | undefined;
       const hasReceivedFree = user.publicMetadata?.hasReceivedFreeCredits as boolean | undefined;
       
-      // 新用户首次使用：初始化额度，且从未领取过免费额度
+      console.log('Current credits:', currentCredits, 'Has received free:', hasReceivedFree);
+      
       if (currentCredits === undefined || (currentCredits === 0 && !hasReceivedFree)) {
-        // 检查是否已经领取过免费额度（防止重复赠送）
         if (!hasReceivedFree) {
           currentCredits = INITIAL_CREDITS;
           await clerk.users.updateUserMetadata(userId, {
@@ -57,12 +60,10 @@ export async function POST(req: Request) {
         }
       }
 
-      // 确保额度有值（兜底）
       if (currentCredits === undefined) {
         currentCredits = 0;
       }
 
-      // 4. 检查额度（再次确认，防止并发）
       if (currentCredits <= 0) {
         return NextResponse.json(
           { error: '免费额度已用完，请购买套餐' },
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
         );
       }
 
-      // 5. 获取上传的图片
+      // 4. 获取上传的图片
       const formData = await req.formData();
       const image = formData.get('image') as File | null;
 
@@ -81,18 +82,21 @@ export async function POST(req: Request) {
         );
       }
 
-      // 6. 验证文件大小
-      if (image.size > 10 * 1024 * 1024) {
+      // 5. 检查 API Key
+      if (!REMOVE_BG_API_KEY) {
+        console.error('REMOVE_BG_API_KEY is not set');
         return NextResponse.json(
-          { error: '图片不能超过 10MB' },
-          { status: 400 }
+          { error: '服务配置错误，请联系管理员' },
+          { status: 500 }
         );
       }
 
-      // 7. 调用 remove.bg API
+      // 6. 调用 remove.bg API
       const imageBuffer = await image.arrayBuffer();
       const imageBase64 = Buffer.from(imageBuffer).toString('base64');
 
+      console.log('Calling remove.bg API...');
+      
       const removeBgResponse = await fetch('https://api.remove.bg/v1.0/removebg', {
         method: 'POST',
         headers: {
@@ -104,18 +108,20 @@ export async function POST(req: Request) {
         }),
       });
 
+      console.log('remove.bg response status:', removeBgResponse.status);
+
       if (!removeBgResponse.ok) {
         const errorText = await removeBgResponse.text();
         console.error('remove.bg API error:', errorText);
         throw new Error('remove.bg API 调用失败');
       }
 
-      // 8. 转换为 base64 返回
+      // 7. 返回结果
       const resultBuffer = await removeBgResponse.arrayBuffer();
       const resultBase64 = Buffer.from(resultBuffer).toString('base64');
       const resultImage = `data:image/png;base64,${resultBase64}`;
 
-      // 9. 扣除额度并保存（原子操作）
+      // 8. 扣除额度
       const newCredits = currentCredits - 1;
       await clerk.users.updateUserMetadata(userId, {
         publicMetadata: {
@@ -125,14 +131,14 @@ export async function POST(req: Request) {
         },
       });
 
-      // 10. 返回结果
+      console.log('Success! New credits:', newCredits);
+
       return NextResponse.json({
         image: resultImage,
         credits: newCredits,
       });
 
     } finally {
-      // 释放锁
       pendingRequests.delete(userId);
     }
 
