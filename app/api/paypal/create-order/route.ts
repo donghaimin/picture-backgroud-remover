@@ -78,6 +78,14 @@ export async function POST(req: Request) {
     const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
     const usdPrice = convertCnyToUsd(pkg.price);
 
+    // 获取站点 URL
+    const baseUrl = process.env.NEXTAUTH_URL ||
+                   process.env.VERCEL_URL ?
+                   `https://${process.env.VERCEL_URL}` :
+                   req.headers.get('host') ?
+                   `https://${req.headers.get('host')}` :
+                   'http://localhost:3000';
+
     // 获取 Access Token
     const accessToken = await getAccessToken();
 
@@ -102,8 +110,8 @@ export async function POST(req: Request) {
           brand_name: 'RemoveBG',
           landing_page: 'NO_PREFERENCE',
           user_action: 'PAY_NOW',
-          return_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/orders?success=true`,
-          cancel_url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/orders?canceled=true`,
+          return_url: `${baseUrl}/orders?success=true`,
+          cancel_url: `${baseUrl}/orders?canceled=true`,
         },
       }),
     });
