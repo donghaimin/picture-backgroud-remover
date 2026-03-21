@@ -18,6 +18,7 @@ function OrdersContent() {
   const [loading, setLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<'success' | 'canceled' | null>(null);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const success = searchParams.get('success');
@@ -74,10 +75,12 @@ function OrdersContent() {
         fetchOrders();
       } else {
         console.error('Capture failed:', data.error);
+        setErrorMessage(data.error || data.debug || '支付处理失败');
         setPaymentStatus(null);
       }
     } catch (error) {
       console.error('Capture error:', error);
+      setErrorMessage(error instanceof Error ? error.message : '支付处理失败');
       setPaymentStatus(null);
     } finally {
       setProcessingPayment(false);
@@ -147,6 +150,26 @@ function OrdersContent() {
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
             <div className="flex items-center gap-3">
               <div className="text-2xl">⚠️</div>
+              <div>
+                <p className="font-semibold text-yellow-800">支付已取消</p>
+                <p className="text-sm text-yellow-600">您可以随时重新购买套餐</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">❌</div>
+              <div>
+                <p className="font-semibold text-red-800">支付处理失败</p>
+                <p className="text-sm text-red-600">{errorMessage}</p>
+                <p className="text-xs text-red-500 mt-1">请联系客服或稍后重试</p>
+              </div>
+            </div>
+          </div>
+        )}
               <div>
                 <p className="font-semibold text-yellow-800">支付已取消</p>
                 <p className="text-sm text-yellow-600">您可以随时重新购买套餐</p>
