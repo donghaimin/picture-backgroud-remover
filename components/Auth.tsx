@@ -1,6 +1,6 @@
 'use client';
 
-import { ClerkProvider, useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
+import { ClerkProvider, useUser, SignInButton, SignOut } from '@clerk/nextjs';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
@@ -15,7 +15,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function AuthButton() {
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded, signOut } = useUser();
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -40,6 +40,11 @@ export function AuthButton() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showMenu]);
+
+  const handleSignOut = async () => {
+    setShowMenu(false);
+    await signOut();
+  };
 
   if (!mounted || !isLoaded) {
     return null;
@@ -91,14 +96,15 @@ export function AuthButton() {
                   📋 历史订单
                 </Link>
                 <div className="border-t border-gray-200 my-1"></div>
-                <SignOutButton signOutCallback={() => setShowMenu(false)}>
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    退出登录
-                  </button>
-                </SignOutButton>
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  退出登录
+                </button>
               </div>
             )}
           </div>
