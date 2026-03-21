@@ -79,10 +79,12 @@ export async function POST(req: Request) {
     const pkg = PACKAGES[packageId as keyof typeof PACKAGES];
     const usdPrice = convertCnyToUsd(pkg.price);
 
-    // 获取站点 URL（修复三元运算符优先级问题）
-    const baseUrl = process.env.NEXTAUTH_URL ||
+    // 获取站点 URL
+    // 优先使用请求的 host（自定义域名或自动域名），其次才是环境变量
+    const host = req.headers.get('host');
+    const baseUrl = (host ? `https://${host}` : null) ||
+                   process.env.NEXTAUTH_URL ||
                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-                   (req.headers.get('host') ? `https://${req.headers.get('host')}` : null) ||
                    'http://localhost:3000';
 
     // 获取 Access Token
