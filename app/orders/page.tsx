@@ -56,9 +56,9 @@ function OrdersContent() {
 
   const handlePayPalReturn = async () => {
     setProcessingPayment(true);
+    setErrorMessage(null);
 
     try {
-      // 捕获 PayPal 支付
       const response = await fetch('/api/paypal/capture-order', {
         method: 'POST',
         headers: {
@@ -71,7 +71,6 @@ function OrdersContent() {
 
       if (response.ok) {
         setPaymentStatus('success');
-        // 重新获取订单列表
         fetchOrders();
       } else {
         console.error('Capture failed:', data.error);
@@ -87,7 +86,6 @@ function OrdersContent() {
     }
   };
 
-  // 计算累计
   const totalOrders = orders.length;
   const totalCredits = orders.reduce((sum, order) => sum + order.credits, 0);
 
@@ -116,7 +114,6 @@ function OrdersContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-8">
           <Link href="/" className="text-blue-600 hover:underline text-sm mb-4 inline-block">
             ← 返回首页
@@ -124,7 +121,6 @@ function OrdersContent() {
           <h1 className="text-3xl font-bold text-gray-900">📋 历史订单</h1>
         </div>
 
-        {/* 支付状态提示 */}
         {processingPayment && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <div className="flex items-center gap-3">
@@ -170,15 +166,7 @@ function OrdersContent() {
             </div>
           </div>
         )}
-              <div>
-                <p className="font-semibold text-yellow-800">支付已取消</p>
-                <p className="text-sm text-yellow-600">您可以随时重新购买套餐</p>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* 统计 */}
         {orders.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="flex gap-8">
@@ -194,7 +182,6 @@ function OrdersContent() {
           </div>
         )}
 
-        {/* 订单列表 */}
         {orders.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <div className="text-6xl mb-4">📦</div>
