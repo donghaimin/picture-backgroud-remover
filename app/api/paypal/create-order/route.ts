@@ -1,13 +1,12 @@
 import { auth } from '@clerk/nextjs/server';
-import { clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-// PayPal 配置
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'AR4gIzAc3sall1DPEDw_6PIYLP6KbPQUZ7Q9Mpa3wds_VLDwmOCBEU7Z9BcWfkAIg0ABSiA5vvCrI482';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'EK2tmJeJwwn5cuWMi2SsPa8e_Q8Hz2u4L_JHQB8sZxKg2dossu7eMKBMNK9_grF-UyAFfmMfcXpvdxW7';
+// PayPal 配置 - 从环境变量读取
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 const PAYPAL_BASE_URL = process.env.PAYPAL_BASE_URL || 'https://api-m.sandbox.paypal.com';
 
-// 套餐配置（单位：分）
+// 套餐配置（价格单位：分）
 const PACKAGES = {
   starter: { credits: 10, price: 900 },    // ¥9
   basic: { credits: 30, price: 2200 },     // ¥22
@@ -16,6 +15,10 @@ const PACKAGES = {
 
 // 获取 PayPal Access Token
 async function getAccessToken() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    throw new Error('PayPal Client ID 或 Secret 未配置');
+  }
+
   const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
   
   const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
@@ -28,12 +31,20 @@ async function getAccessToken() {
   });
 
   const data = await response.json();
+  
+  if (data.error) {
+    throw new Error(`PayPal认证失败: ${data.error_description || data.error}`);
+  }
+  
   return data.access_token;
 }
 
 // 创建 PayPal 订单
 export async function POST(req: Request) {
   try {
+    console.log('PAYPAL_CLIENT_ID:', PAYPAL_CLIENT_ID ? '已配置' : '未配置');
+    console.log('PAYPAL_BASE_URL:', PAYPAL_BASE_URL);
+
     const { userId } = await auth();
 
     if (!userId) {
@@ -71,8 +82,8 @@ export async function POST(req: Request) {
           reference_id: `${userId}_${packageId}_${Date.now()}`,
           description: `购买 ${pkg.credits} 次图片背景移除`,
           amount: {
-            currency_code: 'CNY',
-            value: (pkg.price / 100).toFixed(2),
+            currency_code: 'USD',  // Sandbox 只支持 USD
+            value: (pkg.price / 100).toFixed(2),  // 转成美元（这里为了简化，实际应该用汇率）
           },
         }],
         application_context: {
@@ -86,17 +97,24 @@ export async function POST(req: Request) {
     });
 
     const orderData = await orderResponse.json();
+    console.log('PayPal order response:', orderData);
 
     if (!orderResponse.ok) {
-      console.error('PayPal order error:', orderData);
       return NextResponse.json(
-        { error: '创建订单失败' },
+        { error: orderData.message || '创建订单失败', details: orderData },
         { status: 500 }
       );
     }
 
     // 找到 approval URL
     const approvalUrl = orderData.links?.find((link: any) => link.rel === 'approve')?.href;
+
+    if (!approvalUrl) {
+      return NextResponse.json(
+        { error: '无法获取支付链接', details: orderData },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       orderId: orderData.id,
@@ -108,7 +126,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('PayPal create order error:', error);
     return NextResponse.json(
-      { error: '创建订单失败' },
+      { error: error instanceof Error ? error.message : '创建订单失败' },
       { status: 500 }
     );
   }
