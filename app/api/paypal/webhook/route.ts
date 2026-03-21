@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
-import crypto from 'crypto';
 
 // 强制动态渲染
 export const dynamic = 'force-dynamic';
@@ -90,51 +89,6 @@ async function verifyWebhookSignature(
     console.error('Webhook verification error:', error);
     return false;
   }
-}
-
-// 获取 Access Token
-async function getAccessToken() {
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-    throw new Error('PayPal credentials not configured');
-  }
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
-
-  const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: 'grant_type=client_credentials',
-  });
-
-  const data = await response.json();
-
-  if (data.error) {
-    throw new Error(`PayPal auth failed: ${data.error_description || data.error}`);
-  }
-
-  return data.access_token;
-}
-
-// 捕获 PayPal 订单
-async function capturePayPalOrder(orderId: string) {
-  const accessToken = await getAccessToken();
-
-  const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Capture failed: ${error.message || 'Unknown error'}`);
-  }
-
-  return response.json();
 }
 
 // 检查订单是否已处理（幂等性保护）
