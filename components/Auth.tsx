@@ -1,6 +1,6 @@
 'use client';
 
-import { ClerkProvider, useUser, SignInButton, SignOut } from '@clerk/nextjs';
+import { ClerkProvider, useUser, SignInButton } from '@clerk/nextjs';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
