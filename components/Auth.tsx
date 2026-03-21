@@ -1,6 +1,6 @@
 'use client';
 
-import { ClerkProvider, useUser, SignInButton } from '@clerk/nextjs';
+import { ClerkProvider, useUser, useAuth, SignInButton } from '@clerk/nextjs';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
@@ -15,7 +15,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function AuthButton() {
-  const { user, isLoaded, signOut } = useUser();
+  const { user, isLoaded } = useUser();
+  const { signOut } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
