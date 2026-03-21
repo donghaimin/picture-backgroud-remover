@@ -7,6 +7,9 @@ export default clerkMiddleware((auth, req) => {
   if (isProtectedRoute(req)) {
     auth().protect();
   }
+}, {
+  signInUrl: '/sign-in',
+  signOutUrl: '/',
 });
 
 export const config = {
