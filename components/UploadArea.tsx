@@ -2,6 +2,7 @@
 
 import { useAuth, SignInButton } from '@clerk/nextjs';
 import { useState, useRef, useEffect } from 'react';
+import PurchaseModal from './PurchaseModal';
 
 type ProcessingStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
@@ -13,6 +14,7 @@ export default function UploadArea() {
   const [error, setError] = useState<string | null>(null);
   const [credits, setCredits] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,6 +35,12 @@ export default function UploadArea() {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 检查额度
+    if (credits <= 0) {
+      setShowPurchaseModal(true);
+      return;
+    }
 
     // 验证文件
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
@@ -202,11 +210,15 @@ export default function UploadArea() {
         </div>
       )}
 
-      {/* 额度用完提示 */}
+      {/* 额度用完提示 - 改为购买按钮 */}
       {credits <= 0 && status === 'idle' && (
-        <div className="mt-4 p-4 bg-red-50 rounded-lg text-center">
-          <p className="text-red-600 font-medium">免费次数已用完</p>
-          <p className="text-sm text-gray-600 mt-1">请联系管理员充值</p>
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setShowPurchaseModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
+          >
+            💎 购买套餐
+          </button>
         </div>
       )}
 
@@ -283,6 +295,13 @@ export default function UploadArea() {
           )}
         </div>
       )}
+
+      {/* 购买弹窗 */}
+      <PurchaseModal 
+        isOpen={showPurchaseModal} 
+        onClose={() => setShowPurchaseModal(false)}
+        currentCredits={credits}
+      />
     </div>
   );
 }
